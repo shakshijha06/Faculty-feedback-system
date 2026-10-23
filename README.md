@@ -64,7 +64,7 @@ mernproject/
 
 ```bash
 git clone <your-repo-url>
-cd mernproject
+cd Faculty-feedback-system
 ```
 
 ### 2. Install server dependencies
