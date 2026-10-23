@@ -96,10 +96,10 @@ Edit `server/.env` and fill in:
 | `PORT`           | Express server port                            | `5000`                                                   |
 | `JWT_SECRET`     | Random secret for signing JWTs                 | `my-super-secret-key-change-this`                        |
 | `NODE_ENV`       | Environment mode                               | `development`                                            |
-| `ADMIN_EMAIL`    | Initial admin email (for seed script)          | `admin@college.edu`                                      |
-| `ADMIN_PASSWORD` | Initial admin password (for seed script)       | `SecurePass123!`                                         |
+| `ADMIN_EMAIL`    | Initial admin email (for seed script)          | `admin@example.com`                                      |
+| `ADMIN_PASSWORD` | Initial admin password (for seed script)       | `replace_with_a_strong_password`                                         |
 
-> **Never commit your `.env` file.** It is already in `.gitignore`.
+> **ADMIN_EMAI and ADMIN_PASSWORD - These are example values only. Set your own credentials in your local .env file....Never commit your `.env` file.** It is already in `.gitignore`.
 
 ---
 
