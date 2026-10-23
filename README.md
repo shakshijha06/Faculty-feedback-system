@@ -99,7 +99,7 @@ Edit `server/.env` and fill in:
 | `ADMIN_EMAIL`    | Initial admin email (for seed script)          | `admin@example.com`                                      |
 | `ADMIN_PASSWORD` | Initial admin password (for seed script)       | `replace_with_a_strong_password`                                         |
 
-> **ADMIN_EMAI and ADMIN_PASSWORD - These are example values only. Set your own credentials in your local .env file....Never commit your `.env` file.** It is already in `.gitignore`.
+> **ADMIN_EMAIL and ADMIN_PASSWORD - These are example values only. Set your own credentials in your local .env file....Never commit your `.env` file.** It is already in `.gitignore`.
 
 ---
 
