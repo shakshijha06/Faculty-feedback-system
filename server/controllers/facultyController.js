@@ -41,8 +41,8 @@ const getAllFaculty = async (req, res, next) => {
  * GET /api/faculty/my-department  (authenticated student)
  *
  * Returns active faculty whose department matches the logged-in student's department.
- * This is the fix for the "no faculty showing on student dashboard" defect — it does NOT
- * require manually created FacultyAssignment records.
+ * Uses flexible matching so abbreviations like "CSE" or "Computer Science" match
+ * canonical "Computer Science and Engineering".
  *
  * If the student has no department set, returns all active faculty so they still see data.
  */
@@ -51,7 +51,19 @@ const getMyDepartmentFaculty = async (req, res, next) => {
   try {
     const query = { isActive: true };
     if (req.user.department) {
-      query.department = { $regex: new RegExp(`^${req.user.department}$`, 'i') };
+      const studentDept = req.user.department.trim();
+      // Handle common variations: "Computer Science", "CSE", "Computer Science and Engineering"
+      let regexPattern = `^${studentDept}$`;
+      if (/computer\s*science/i.test(studentDept) || /^cse$/i.test(studentDept)) {
+        regexPattern = 'computer\\s*science|cse';
+      } else if (/information\s*technology/i.test(studentDept) || /^it$/i.test(studentDept)) {
+        regexPattern = 'information\\s*technology|\\bit\\b';
+      } else if (/electronics/i.test(studentDept) || /^ece$/i.test(studentDept)) {
+        regexPattern = 'electronics|ece';
+      } else if (/internet\s*of\s*things/i.test(studentDept) || /^iot$/i.test(studentDept)) {
+        regexPattern = 'internet\\s*of\\s*things|iot';
+      }
+      query.department = { $regex: new RegExp(regexPattern, 'i') };
     }
     const faculty = await Faculty.find(query).sort({ name: 1 });
     res.status(200).json({ success: true, count: faculty.length, data: faculty });
@@ -81,34 +93,55 @@ const getFacultyById = async (req, res, next) => {
 /**
  * GET /api/faculty/:id/stats  (admin only)
  *
- * Aggregates all FeedbackSubmissions across ALL assignments for this faculty.
- * PRIVACY: returns only aggregated averages and anonymous comments — no student identifiers.
+ * Aggregates all FeedbackSubmissions for this faculty.
+ * PRIVACY: returns only aggregated averages, score distributions, and anonymous comments — zero student identifiers.
  */
 const getFacultyStats = async (req, res, next) => {
   if (!requireDB(res)) return;
   try {
-    const assignments = await FacultyAssignment.find({ faculty: req.params.id }).select('_id');
-    const assignmentIds = assignments.map(a => a._id);
+    const empty = {
+      success: true,
+      responseCount: 0,
+      averageScores: {},
+      overallAverage: null,
+      ratingDistributions: {},
+      comments: [],
+      reasons: {},
+    };
 
-    const empty = { success: true, responseCount: 0, averageScores: {}, overallAverage: null, comments: [] };
-    if (assignmentIds.length === 0) return res.status(200).json(empty);
+    // Find submissions directly by faculty ID
+    const submissions = await FeedbackSubmission.find({ faculty: req.params.id }).sort({ createdAt: -1 });
+    if (!submissions || submissions.length === 0) return res.status(200).json(empty);
 
-    const submissions = await FeedbackSubmission.find({ assignment: { $in: assignmentIds } });
-    if (submissions.length === 0) return res.status(200).json(empty);
-
-    // Aggregate per-question scores
+    // Aggregate per-question scores & rating distribution
     const scoreSums = {};
     const scoreCounts = {};
+    const ratingDistributions = {}; // { questionKey: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } }
+    const reasons = {};             // { questionKey: ['reason 1', 'reason 2'] }
     let totalScoreSum = 0;
     let totalScoreCount = 0;
 
     submissions.forEach(sub => {
-      sub.ratings.forEach(({ questionKey, score }) => {
-        scoreSums[questionKey] = (scoreSums[questionKey] || 0) + score;
-        scoreCounts[questionKey] = (scoreCounts[questionKey] || 0) + 1;
-        totalScoreSum += score;
-        totalScoreCount += 1;
-      });
+      if (Array.isArray(sub.ratings)) {
+        sub.ratings.forEach(({ questionKey, score, reason }) => {
+          if (!scoreSums[questionKey]) {
+            scoreSums[questionKey] = 0;
+            scoreCounts[questionKey] = 0;
+            ratingDistributions[questionKey] = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+            reasons[questionKey] = [];
+          }
+          scoreSums[questionKey] += score;
+          scoreCounts[questionKey] += 1;
+          if (score >= 1 && score <= 5) {
+            ratingDistributions[questionKey][score] += 1;
+          }
+          if (reason && reason.trim()) {
+            reasons[questionKey].push(reason.trim());
+          }
+          totalScoreSum += score;
+          totalScoreCount += 1;
+        });
+      }
     });
 
     const averageScores = {};
@@ -122,13 +155,23 @@ const getFacultyStats = async (req, res, next) => {
 
     // Anonymous comments — no student identifiers whatsoever
     const comments = submissions
-      .filter(s => s.positiveComment || s.improvementComment)
+      .filter(s => s.positiveComment || s.improvementComment || s.overallComment)
       .map(s => ({
         positiveComment: s.positiveComment || null,
         improvementComment: s.improvementComment || null,
+        overallComment: s.overallComment || null,
+        academicYear: s.academicYear || null,
       }));
 
-    res.status(200).json({ success: true, responseCount: submissions.length, averageScores, overallAverage, comments });
+    res.status(200).json({
+      success: true,
+      responseCount: submissions.length,
+      averageScores,
+      overallAverage,
+      ratingDistributions,
+      comments,
+      reasons,
+    });
   } catch (err) { next(err); }
 };
 
@@ -136,12 +179,35 @@ const getFacultyStats = async (req, res, next) => {
 const createFaculty = async (req, res, next) => {
   if (!requireDB(res)) return;
   const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
+  if (!errors.isEmpty()) {
+    const firstMsg = errors.array()[0]?.msg || 'Validation failed.';
+    return res.status(400).json({ success: false, message: firstMsg, errors: errors.array() });
+  }
   try {
-    const faculty = await Faculty.create(req.body);
+    const payload = { ...req.body };
+    if (!payload.email || !payload.email.trim()) {
+      delete payload.email; // avoid empty string violating email regex or unique null index
+    }
+    if (payload.abbreviation && typeof payload.abbreviation === 'string') {
+      payload.abbreviation = payload.abbreviation.trim();
+    }
+    const faculty = await Faculty.create(payload);
     res.status(201).json({ success: true, data: faculty });
   } catch (err) {
-    if (err.code === 11000) return res.status(400).json({ success: false, message: 'A faculty with this Employee ID already exists.' });
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyValue || {})[0];
+      const val = err.keyValue ? err.keyValue[field] : '';
+      const msg = field === 'employeeId'
+        ? `A faculty with Employee ID "${val}" already exists.`
+        : field === 'email'
+        ? `A faculty with email "${val}" already exists.`
+        : 'A faculty with this information already exists.';
+      return res.status(400).json({ success: false, message: msg });
+    }
+    if (err.name === 'ValidationError') {
+      const firstMsg = Object.values(err.errors)[0]?.message || 'Validation error.';
+      return res.status(400).json({ success: false, message: firstMsg });
+    }
     next(err);
   }
 };
@@ -150,7 +216,14 @@ const createFaculty = async (req, res, next) => {
 const updateFaculty = async (req, res, next) => {
   if (!requireDB(res)) return;
   try {
-    const faculty = await Faculty.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const updateData = { ...req.body };
+    if (updateData.email !== undefined && (!updateData.email || !updateData.email.trim())) {
+      delete updateData.email;
+    }
+    if (updateData.abbreviation !== undefined && typeof updateData.abbreviation === 'string') {
+      updateData.abbreviation = updateData.abbreviation.trim();
+    }
+    const faculty = await Faculty.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     if (!faculty) return res.status(404).json({ success: false, message: 'Faculty not found.' });
     res.status(200).json({ success: true, data: faculty });
   } catch (err) { next(err); }

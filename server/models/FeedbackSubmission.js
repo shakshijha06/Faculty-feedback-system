@@ -73,6 +73,7 @@ const feedbackSubmissionSchema = new mongoose.Schema(
 
     positiveComment:    { type: String, trim: true, maxlength: 1000 },
     improvementComment: { type: String, trim: true, maxlength: 1000 },
+    overallComment:     { type: String, trim: true, maxlength: 1500 },
   },
   { timestamps: true }
 );

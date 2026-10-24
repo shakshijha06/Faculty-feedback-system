@@ -20,6 +20,12 @@ const facultySchema = new mongoose.Schema(
       maxlength: [100, 'Name cannot exceed 100 characters'],
     },
 
+    abbreviation: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
     employeeId: {
       type: String,
       required: [true, 'Employee ID is required'],
@@ -30,6 +36,7 @@ const facultySchema = new mongoose.Schema(
     email: {
       type: String,
       unique: true,
+      sparse: true,
       lowercase: true,
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address'],

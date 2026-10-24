@@ -5,20 +5,20 @@
  * Students log in with Enrollment Number. Admins log in with institutional email.
  * The server determines the role — no client-side role selection.
  */
-
+import { Eye, EyeOff } from 'lucide-react';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
   const [identifier, setIdentifier] = useState('');
-  const [password,   setPassword]   = useState('');
-  const [showPass,   setShowPass]   = useState(false);
-  const [error,      setError]      = useState('');
-  const [loading,    setLoading]    = useState(false);
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const { login } = useAuth();
-  const navigate  = useNavigate();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,32 +39,43 @@ const Login = () => {
   };
 
   return (
-    <main className="login-page" aria-label="Login page">
-      <div className="login-wrapper">
-
-        {/* Institutional header */}
-        <header className="inst-header" aria-label="Institution identity">
-          <img
-            src="/uem-logo-placeholder.png"
-            alt="University of Engineering and Management logo"
-            className="inst-logo"
-          />
-          <div className="inst-names">
-            <span className="inst-name-upper">University of Engineering and Management, Kolkata</span>
-            <div className="inst-divider" role="separator" />
-            <span className="inst-name-lower">Institute of Engineering and Management, Kolkata</span>
+    <div className="login-page" aria-label="Login page">
+      {/* ── Official Institutional Top Header ────────────────────── */}
+      <header className="login-top-header" role="banner" aria-label="Institution identity">
+        <div className="login-top-header-inner">
+          <div className="inst-brand-cluster">
+            <div className="inst-logos-group">
+              <img
+                src="/uem-logo-placeholder.png"
+                alt="University of Engineering and Management logo"
+                className="inst-header-logo"
+              />
+              <img
+                src="/iem-logo-placeholder.png"
+                alt="Institute of Engineering and Management logo"
+                className="inst-header-logo"
+              />
+            </div>
+            <div className="inst-titles-stack">
+              <h1 className="inst-title-primary">University of Engineering and Management, Kolkata</h1>
+              <div className="inst-title-divider" role="separator" />
+              <h2 className="inst-title-secondary">Institute of Engineering and Management, Kolkata</h2>
+            </div>
           </div>
-          <img
-            src="/iem-logo-placeholder.png"
-            alt="Institute of Engineering and Management logo"
-            className="inst-logo"
-          />
-        </header>
+          <div className="inst-portal-badge">
+            <span className="inst-portal-badge-dot" />
+            <span>Faculty Feedback Portal</span>
+          </div>
+        </div>
+      </header>
 
-        {/* Login card */}
+      {/* ── Centered Login Form Area ─────────────────────────────── */}
+      <main className="login-body-container">
         <div className="login-card" role="region" aria-label="Login form">
-          <h1 className="login-title">Login</h1>
-          <p className="login-subtitle">Faculty Feedback Portal</p>
+          <div className="login-card-header">
+            <h2 className="login-title">Sign In</h2>
+            <p className="login-subtitle">Access your academic feedback portal</p>
+          </div>
 
           {error && (
             <div className="alert alert-error" role="alert" aria-live="assertive">{error}</div>
@@ -72,12 +83,12 @@ const Login = () => {
 
           <form onSubmit={handleSubmit} noValidate>
             <div className="form-group">
-              <label htmlFor="identifier" className="form-label">Username</label>
+              <label htmlFor="identifier" className="form-label">Username / Enrollment No.</label>
               <input
                 id="identifier"
                 type="text"
                 className="form-input"
-                placeholder=""
+                placeholder="Enter enrollment number or email"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 autoComplete="username"
@@ -85,9 +96,7 @@ const Login = () => {
                 aria-describedby="identifier-hint"
                 autoFocus
               />
-              <p id="identifier-hint" className="form-hint">
-                Enter your college enrollment number or institutional email address.
-              </p>
+             
             </div>
 
             <div className="form-group">
@@ -97,19 +106,21 @@ const Login = () => {
                   id="password"
                   type={showPass ? 'text' : 'password'}
                   className="form-input"
-                  placeholder=""
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
                   aria-required="true"
                 />
+
                 <button
                   type="button"
                   className="btn-show-pass"
-                  onClick={() => setShowPass(v => !v)}
+                  onClick={() => setShowPass((v) => !v)}
                   aria-label={showPass ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPass}
                 >
-                  {showPass ? '🙈' : '👁'}
+                  {showPass ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
                 </button>
               </div>
             </div>
@@ -125,12 +136,11 @@ const Login = () => {
           </form>
 
           <p className="login-footer-note">
-            Forgot your password? Contact your administrator.
+            Forgot your password? Contact your department administrator.
           </p>
         </div>
-
-      </div>
-    </main>
+      </main>
+    </div>
   );
 };
 

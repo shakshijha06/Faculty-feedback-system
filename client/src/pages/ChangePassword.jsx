@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import api from '../services/api';
 
 const ChangePassword = () => {
@@ -81,7 +82,7 @@ const ChangePassword = () => {
                 <button type="button" className="btn-show-pass"
                   onClick={() => setShowCurrent(v => !v)}
                   aria-label={showCurrent ? 'Hide current password' : 'Show current password'}>
-                  {showCurrent ? '🙈' : '👁'}
+                  {showCurrent ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
                 </button>
               </div>
             </div>
@@ -101,7 +102,7 @@ const ChangePassword = () => {
                 <button type="button" className="btn-show-pass"
                   onClick={() => setShowNew(v => !v)}
                   aria-label={showNew ? 'Hide new password' : 'Show new password'}>
-                  {showNew ? '🙈' : '👁'}
+                  {showNew ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
                 </button>
               </div>
             </div>

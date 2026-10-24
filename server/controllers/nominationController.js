@@ -12,6 +12,7 @@
  *   PUT  /api/nominations/:id/status    — admin: update status
  */
 
+const Faculty           = require('../models/Faculty');
 const AwardNomination  = require('../models/AwardNomination');
 const NominationCycle  = require('../models/NominationCycle');
 const { validationResult } = require('express-validator');
@@ -35,27 +36,51 @@ const createNomination = async (req, res, next) => {
     const { primaryFaculty, primaryReason, additionalNominees } = req.body;
 
     // 1. Find the open cycle
-    const cycle = await NominationCycle.findOne({ status: 'open' });
+    const cycle = await NominationCycle.findOne({ status: 'open', isDeleted: { $ne: true } });
     if (!cycle) {
       return res.status(400).json({ success: false, message: 'No nomination cycle is currently open.' });
     }
 
-    // 2. Validate primary faculty is in eligibleFaculty[]
-    const eligibleIds = cycle.eligibleFaculty.map(String);
-    if (!eligibleIds.includes(String(primaryFaculty))) {
-      return res.status(400).json({ success: false, message: 'The selected faculty member is not eligible for this nomination cycle.' });
+    // Check if student has already nominated in this cycle
+    const alreadySubmitted = await AwardNomination.findOne({
+      nominator: req.user._id,
+      $or: [{ cycle: cycle._id }, { academicYear: cycle.academicYear }],
+    });
+    if (alreadySubmitted) {
+      return res.status(400).json({ success: false, message: 'You have already submitted a nomination for this cycle.' });
     }
 
-    // 3. Validate additional nominees are also eligible
+    // 2. Validate primary faculty eligibility
+    const eligibleIds = (cycle.eligibleFaculty || []).map(String);
+    if (eligibleIds.length > 0) {
+      if (!eligibleIds.includes(String(primaryFaculty))) {
+        return res.status(400).json({ success: false, message: 'The selected faculty member is not eligible for this nomination cycle.' });
+      }
+    } else {
+      const fac = await Faculty.findOne({ _id: primaryFaculty, isActive: true });
+      if (!fac) {
+        return res.status(400).json({ success: false, message: 'Selected faculty member is not active or found.' });
+      }
+    }
+
+    // 3. Validate additional nominees
     const extras = additionalNominees || [];
     for (const n of extras) {
-      if (!eligibleIds.includes(String(n.faculty))) {
-        return res.status(400).json({ success: false, message: 'One or more additional nominees are not eligible for this cycle.' });
+      if (eligibleIds.length > 0) {
+        if (!eligibleIds.includes(String(n.faculty))) {
+          return res.status(400).json({ success: false, message: 'One or more additional nominees are not eligible for this cycle.' });
+        }
+      } else {
+        const fac = await Faculty.findOne({ _id: n.faculty, isActive: true });
+        if (!fac) {
+          return res.status(400).json({ success: false, message: 'One or more additional nominees are not active or found.' });
+        }
       }
     }
 
     const nomination = await AwardNomination.create({
       nominator: req.user._id,
+      cycle: cycle._id,
       primaryFaculty,
       primaryReason,
       additionalNominees: extras,
@@ -69,7 +94,7 @@ const createNomination = async (req, res, next) => {
     });
   } catch (err) {
     if (err.code === 11000) {
-      return res.status(400).json({ success: false, message: 'You have already submitted a nomination for this academic year.' });
+      return res.status(400).json({ success: false, message: 'You have already submitted a nomination for this award cycle.' });
     }
     next(err);
   }
@@ -79,7 +104,14 @@ const createNomination = async (req, res, next) => {
 const getMyNomination = async (req, res, next) => {
   if (!requireDB(res)) return;
   try {
-    const nomination = await AwardNomination.findOne({ nominator: req.user._id })
+    const cycle = await NominationCycle.findOne({ status: 'open', isDeleted: { $ne: true } });
+    const query = { nominator: req.user._id };
+    if (req.query.cycleId) {
+      query.cycle = req.query.cycleId;
+    } else if (cycle) {
+      query.$or = [{ cycle: cycle._id }, { academicYear: cycle.academicYear }];
+    }
+    const nomination = await AwardNomination.findOne(query)
       .populate('primaryFaculty', 'name department designation')
       .populate('additionalNominees.faculty', 'name department designation');
     res.status(200).json({ success: true, data: nomination });
@@ -90,23 +122,40 @@ const getMyNomination = async (req, res, next) => {
 const getLeaderboard = async (req, res, next) => {
   if (!requireDB(res)) return;
   try {
-    const nominations = await AwardNomination.find()
+    const filter = {};
+    if (req.query.year) filter.academicYear = req.query.year;
+
+    const nominations = await AwardNomination.find(filter)
       .populate('primaryFaculty', 'name department designation employeeId');
 
     const facultyMap = {};
     nominations.forEach(nom => {
-      const fid = String(nom.primaryFaculty?._id);
+      if (!nom.primaryFaculty) return;
+      const fid = String(nom.primaryFaculty._id);
       if (!facultyMap[fid]) {
-        facultyMap[fid] = { faculty: nom.primaryFaculty, nominationCount: 0, reasons: [] };
+        facultyMap[fid] = {
+          faculty: nom.primaryFaculty,
+          nominationCount: 0,
+          reasons: [],
+          status: nom.status || 'pending',
+        };
       }
       facultyMap[fid].nominationCount += 1;
-      facultyMap[fid].reasons.push(nom.primaryReason);
+      if (nom.primaryReason) {
+        facultyMap[fid].reasons.push(nom.primaryReason);
+      }
     });
 
-    const leaderboard = Object.values(facultyMap)
-      .sort((a, b) => b.nominationCount - a.nominationCount);
+    // Deterministic tie-handling: sort by nominationCount DESC, then faculty name ASC
+    const leaderboard = Object.values(facultyMap).sort((a, b) => {
+      const diff = b.nominationCount - a.nominationCount;
+      if (diff !== 0) return diff;
+      const nameA = a.faculty?.name || '';
+      const nameB = b.faculty?.name || '';
+      return nameA.localeCompare(nameB);
+    });
 
-    res.status(200).json({ success: true, data: leaderboard });
+    res.status(200).json({ success: true, count: leaderboard.length, data: leaderboard });
   } catch (err) { next(err); }
 };
 

@@ -52,17 +52,28 @@ const login = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Enrollment number/email and password are required.' });
     }
 
-    // Try rollNumber first (students); fall back to email (admins).
-    // Both fields are indexed so this is efficient.
-    const normalizedIdentifier = identifier.trim().toUpperCase();
-    let user = await User.findOne({ rollNumber: normalizedIdentifier }).select('+password');
-    if (!user) {
-      // Fall back: try email match (for admin accounts)
-      user = await User.findOne({ email: identifier.trim().toLowerCase() }).select('+password');
+    // Support both enrollment number (students) and institutional email (students & admins).
+    const trimmed = identifier.trim();
+    const rollCandidate = trimmed.toUpperCase();
+    const emailCandidate = trimmed.toLowerCase();
+
+    let user = await User.findOne({
+      $or: [
+        { rollNumber: rollCandidate },
+        { email: emailCandidate },
+      ],
+    }).select('+password');
+
+    // Case-insensitive fallback if entered with unconventional casing or whitespace
+    if (!user && trimmed.includes('@')) {
+      const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      user = await User.findOne({
+        email: { $regex: new RegExp(`^${escaped}$`, 'i') },
+      }).select('+password');
     }
 
     // Generic error — do NOT reveal whether the account exists
-    const INVALID_MSG = 'Invalid credentials. Please check your enrollment number and password.';
+    const INVALID_MSG = 'Invalid credentials. Please check your enrollment number/email and password.';
 
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ success: false, message: INVALID_MSG });

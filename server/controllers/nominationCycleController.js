@@ -12,7 +12,9 @@
  *   PUT  /api/nomination-cycles/:id      — admin: update cycle (eligible faculty, status, title)
  */
 
+const Faculty = require('../models/Faculty');
 const NominationCycle = require('../models/NominationCycle');
+const AwardNomination = require('../models/AwardNomination');
 const { validationResult } = require('express-validator');
 const { isDBConnected }    = require('../config/db');
 
@@ -28,18 +30,42 @@ const requireDB = (res) => {
 const getActiveCycle = async (req, res, next) => {
   if (!requireDB(res)) return;
   try {
-    const cycle = await NominationCycle.findOne({ status: 'open' })
-      .populate('eligibleFaculty', 'name department designation isActive')
+    const cycle = await NominationCycle.findOne({ status: 'open', isDeleted: { $ne: true } })
+      .populate('eligibleFaculty', 'name department designation employeeId isActive')
       .lean();
 
     if (!cycle) {
-      return res.status(200).json({ success: true, data: null, message: 'No nomination cycle is currently open.' });
+      return res.status(200).json({ success: true, data: null, hasSubmitted: false, message: 'No nomination cycle is currently open.' });
     }
 
-    // Filter to only active faculty (guard for faculty deactivated after cycle creation)
-    cycle.eligibleFaculty = cycle.eligibleFaculty.filter(f => f.isActive);
+    // Filter to only active faculty
+    cycle.eligibleFaculty = (cycle.eligibleFaculty || []).filter(f => f && f.isActive);
 
-    res.status(200).json({ success: true, data: cycle });
+    // If eligibleFaculty was empty (admin opened cycle without restricting to a subset),
+    // automatically include all active faculty members so students can submit nominations.
+    if (cycle.eligibleFaculty.length === 0) {
+      const allActive = await Faculty.find({ isActive: true })
+        .select('name department designation employeeId isActive')
+        .sort({ name: 1 })
+        .lean();
+      cycle.eligibleFaculty = allActive;
+    }
+
+    // Check if the authenticated student has already submitted for this specific cycle
+    let hasSubmitted = false;
+    let userNomination = null;
+    if (req.user && req.user.role === 'student') {
+      userNomination = await AwardNomination.findOne({
+        nominator: req.user._id,
+        $or: [{ cycle: cycle._id }, { academicYear: cycle.academicYear }],
+      })
+        .populate('primaryFaculty', 'name department designation')
+        .populate('additionalNominees.faculty', 'name department designation')
+        .lean();
+      hasSubmitted = !!userNomination;
+    }
+
+    res.status(200).json({ success: true, data: cycle, hasSubmitted, userNomination });
   } catch (err) { next(err); }
 };
 
@@ -109,4 +135,21 @@ const updateCycle = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getActiveCycle, listCycles, createCycle, updateCycle };
+// DELETE /api/nomination-cycles/:id  (admin only)
+const deleteCycle = async (req, res, next) => {
+  if (!requireDB(res)) return;
+  try {
+    const cycle = await NominationCycle.findById(req.params.id);
+    if (!cycle) return res.status(404).json({ success: false, message: 'Cycle not found.' });
+
+    // Soft-delete: marked as deleted and closed, preserving historical nominations
+    cycle.isDeleted = true;
+    cycle.status = 'closed';
+    cycle.closedAt = cycle.closedAt || new Date();
+    await cycle.save();
+
+    res.status(200).json({ success: true, message: 'Cycle deleted and archived successfully.' });
+  } catch (err) { next(err); }
+};
+
+module.exports = { getActiveCycle, listCycles, createCycle, updateCycle, deleteCycle };

@@ -5,7 +5,7 @@
 const express = require('express');
 const { body }  = require('express-validator');
 const {
-  getActiveCycle, listCycles, createCycle, updateCycle,
+  getActiveCycle, listCycles, createCycle, updateCycle, deleteCycle,
 } = require('../controllers/nominationCycleController');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
 
@@ -17,9 +17,10 @@ const cycleValidation = [
 ];
 
 // Specific before parameterised
-router.get('/active', protect, getActiveCycle);
-router.get('/',       protect, adminOnly, listCycles);
-router.post('/',      protect, adminOnly, cycleValidation, createCycle);
-router.put('/:id',    protect, adminOnly, updateCycle);
+router.get('/active',  protect, getActiveCycle);
+router.get('/',        protect, adminOnly, listCycles);
+router.post('/',       protect, adminOnly, cycleValidation, createCycle);
+router.put('/:id',     protect, adminOnly, updateCycle);
+router.delete('/:id',  protect, adminOnly, deleteCycle);
 
 module.exports = router;

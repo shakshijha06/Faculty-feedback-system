@@ -45,6 +45,12 @@ const nominationCycleSchema = new mongoose.Schema(
       ref: 'User',
     },
 
+    // Soft delete / archival flag
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+
     openedAt:  { type: Date },
     closedAt:  { type: Date },
   },

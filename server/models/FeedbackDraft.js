@@ -15,7 +15,7 @@ const draftRatingSchema = new mongoose.Schema(
   {
     questionKey: { type: String, required: true, trim: true },
     label:       { type: String, trim: true },
-    score:       { type: Number, min: 1, max: 5 },
+    score:       { type: Number, min: 0, max: 5, default: 0 },
     reason:      { type: String, trim: true, maxlength: 500 },
   },
   { _id: false }
@@ -41,6 +41,7 @@ const feedbackDraftSchema = new mongoose.Schema(
     ratings:            { type: [draftRatingSchema], default: [] },
     positiveComment:    { type: String, trim: true, maxlength: 1000 },
     improvementComment: { type: String, trim: true, maxlength: 1000 },
+    overallComment:     { type: String, trim: true, maxlength: 1500 },
     lastSaved:          { type: Date, default: Date.now },
   },
   { timestamps: true }

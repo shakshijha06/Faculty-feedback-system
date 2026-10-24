@@ -23,9 +23,11 @@ const router = express.Router();
 
 const facultyValidation = [
   body('name').trim().notEmpty().withMessage('Name is required'),
+  body('abbreviation').optional().trim(),
   body('employeeId').trim().notEmpty().withMessage('Employee ID is required'),
   body('department').trim().notEmpty().withMessage('Department is required'),
-  body('designation').trim().notEmpty().withMessage('Designation is required'),
+  body('designation').optional().trim(),
+  body('email').optional({ checkFalsy: true }).isEmail().withMessage('Please provide a valid email address'),
 ];
 
 // IMPORTANT: specific routes before parameterised ones to avoid route conflicts

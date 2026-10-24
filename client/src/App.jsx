@@ -23,42 +23,50 @@ const HomeRedirect = () => {
   return <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} replace />;
 };
 
+const AppLayout = ({ children }) => {
+  const { user } = useAuth();
+  return (
+    <div className={`app-shell ${user ? 'app-shell-auth' : 'app-shell-public'}`}>
+      {user && <Navbar />}
+      <div className={user ? 'app-main-content' : 'app-main-full'}>
+        {children}
+      </div>
+    </div>
+  );
+};
+
 const App = () => (
   <AuthProvider>
     <Router>
-      <NavbarWrapper />
-      <Routes>
-        {/* Public */}
-        <Route path="/login" element={<Login />} />
+      <AppLayout>
+        <Routes>
+          {/* Public */}
+          <Route path="/login" element={<Login />} />
 
-        {/* Student routes */}
-        <Route element={<PrivateRoute role="student" />}>
-          <Route path="/dashboard"              element={<Dashboard />} />
-          <Route path="/feedback-list"          element={<FeedbackList />} />
-          <Route path="/feedback/:facultyId"    element={<FeedbackForm />} />
-          <Route path="/nominations"            element={<Nominations />} />
-        </Route>
+          {/* Student routes */}
+          <Route element={<PrivateRoute role="student" />}>
+            <Route path="/dashboard"              element={<Dashboard />} />
+            <Route path="/feedback-list"          element={<FeedbackList />} />
+            <Route path="/feedback/:facultyId"    element={<FeedbackForm />} />
+            <Route path="/nominations"            element={<Nominations />} />
+          </Route>
 
-        {/* Admin routes */}
-        <Route element={<PrivateRoute role="admin" />}>
-          <Route path="/admin" element={<AdminDashboard />} />
-        </Route>
+          {/* Admin routes */}
+          <Route element={<PrivateRoute role="admin" />}>
+            <Route path="/admin" element={<AdminDashboard />} />
+          </Route>
 
-        {/* Shared — both roles */}
-        <Route element={<PrivateRoute />}>
-          <Route path="/change-password" element={<ChangePassword />} />
-        </Route>
+          {/* Shared — both roles */}
+          <Route element={<PrivateRoute />}>
+            <Route path="/change-password" element={<ChangePassword />} />
+          </Route>
 
-        {/* Catch-all */}
-        <Route path="*" element={<HomeRedirect />} />
-      </Routes>
+          {/* Catch-all */}
+          <Route path="*" element={<HomeRedirect />} />
+        </Routes>
+      </AppLayout>
     </Router>
   </AuthProvider>
 );
-
-const NavbarWrapper = () => {
-  const { user } = useAuth();
-  return user ? <Navbar /> : null;
-};
 
 export default App;

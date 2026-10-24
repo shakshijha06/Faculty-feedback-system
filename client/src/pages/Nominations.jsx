@@ -19,6 +19,7 @@ const Nominations = () => {
   const navigate = useNavigate();
 
   const [cycle,          setCycle]          = useState(null);
+  const [hasSubmitted,   setHasSubmitted]   = useState(false);
   const [myNomination,   setMyNomination]   = useState(null);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState('');
@@ -35,12 +36,21 @@ const Nominations = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const [cycleRes, mineRes] = await Promise.all([
-          api.get('/api/nomination-cycles/active'),
-          api.get('/api/nominations/mine'),
-        ]);
-        setCycle(cycleRes.data.data);
-        setMyNomination(mineRes.data.data);
+        const cycleRes = await api.get('/api/nomination-cycles/active');
+        const activeCycle = cycleRes.data.data;
+        setCycle(activeCycle);
+
+        if (cycleRes.data.hasSubmitted) {
+          setHasSubmitted(true);
+          setMyNomination(cycleRes.data.userNomination);
+        } else {
+          // Double check /api/nominations/mine for active cycle
+          const mineRes = await api.get('/api/nominations/mine');
+          if (mineRes.data.data) {
+            setHasSubmitted(true);
+            setMyNomination(mineRes.data.data);
+          }
+        }
       } catch (err) {
         setError(err.message || 'Failed to load nomination information.');
       } finally { setLoading(false); }
@@ -88,23 +98,6 @@ const Nominations = () => {
 
   if (loading) return <div className="spinner-wrap"><div className="spinner" /> Loading…</div>;
 
-  // Already submitted
-  if (myNomination && !success) return (
-    <div className="page"><div className="container" style={{ maxWidth: 600 }}>
-      <button className="btn-back" onClick={() => navigate('/dashboard')}>← Back</button>
-      <div className="card" style={{ textAlign: 'center', padding: '2.5rem 2rem' }}>
-        <div style={{ fontSize: '2.5rem', marginBottom: '.75rem', color: 'var(--clr-success)' }}>✓</div>
-        <h2 style={{ fontWeight: 700, marginBottom: '.5rem' }}>Nomination Submitted</h2>
-        <p style={{ color: 'var(--clr-text-muted)', marginBottom: '1.25rem' }}>
-          You have already nominated <strong>{myNomination.primaryFaculty?.name}</strong> for this award cycle.
-        </p>
-        <div className="alert alert-info" style={{ textAlign: 'left' }}>
-          Nominations are reviewed by the authorized college committee. You will be informed of results through official channels.
-        </div>
-      </div>
-    </div></div>
-  );
-
   // Success after submit
   if (success) return (
     <div className="page"><div className="container" style={{ maxWidth: 600 }}>
@@ -112,9 +105,28 @@ const Nominations = () => {
         <div style={{ fontSize: '2.5rem', marginBottom: '.75rem', color: 'var(--clr-success)' }}>✓</div>
         <h2 style={{ fontWeight: 700, marginBottom: '.5rem' }}>Nomination Submitted</h2>
         <p style={{ color: 'var(--clr-text-muted)', marginBottom: '1.5rem' }}>
-          Your nomination has been submitted for the <strong>{cycle?.title}</strong> award cycle.
+          Your nomination has been submitted successfully for the <strong>{cycle?.title}</strong> award cycle.
         </p>
         <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>Back to Dashboard</button>
+      </div>
+    </div></div>
+  );
+
+  // Already submitted for open cycle or all available cycles answered
+  if (hasSubmitted || myNomination) return (
+    <div className="page"><div className="container" style={{ maxWidth: 600 }}>
+      <button className="btn-back" onClick={() => navigate('/dashboard')}>← Back</button>
+      <div className="card" style={{ textAlign: 'center', padding: '2.5rem 2rem' }}>
+        <div style={{ fontSize: '2.5rem', marginBottom: '.75rem', color: 'var(--clr-primary)' }}>🏆</div>
+        <h2 style={{ fontWeight: 700, marginBottom: '.5rem' }}>No new nomination forms available.</h2>
+        <p style={{ color: 'var(--clr-text-muted)', marginBottom: '1.25rem' }}>
+          {myNomination?.primaryFaculty?.name
+            ? `You have already submitted your nomination for ${myNomination.primaryFaculty.name} in this cycle.`
+            : 'You have submitted all available nomination forms.'}
+        </p>
+        <div className="alert alert-info" style={{ textAlign: 'left' }}>
+          When a new nomination cycle is opened by the administration, eligible students will automatically see the new nomination form here.
+        </div>
       </div>
     </div></div>
   );
@@ -125,9 +137,9 @@ const Nominations = () => {
       <button className="btn-back" onClick={() => navigate('/dashboard')}>← Back</button>
       <div className="card" style={{ textAlign: 'center', padding: '2.5rem 2rem' }}>
         <div style={{ fontSize: '2.5rem', marginBottom: '.75rem', color: 'var(--clr-text-muted)' }}>🏆</div>
-        <h2 style={{ fontWeight: 700, marginBottom: '.5rem' }}>Nominations Not Open</h2>
+        <h2 style={{ fontWeight: 700, marginBottom: '.5rem' }}>No new nomination forms available.</h2>
         <p style={{ color: 'var(--clr-text-muted)' }}>
-          No nomination cycle is currently active. Please check back later or contact your administrator.
+          No nomination cycle is currently active. When an award cycle is opened, it will appear here.
         </p>
       </div>
     </div></div>

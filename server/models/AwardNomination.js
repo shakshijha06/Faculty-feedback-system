@@ -65,6 +65,12 @@ const awardNominationSchema = new mongoose.Schema(
       default: [],
     },
 
+    // Optional cycle reference
+    cycle: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'NominationCycle',
+    },
+
     academicYear: {
       type: String,
       required: [true, 'Academic year is required'],

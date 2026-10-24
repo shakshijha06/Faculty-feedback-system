@@ -43,7 +43,7 @@ const submitFeedback = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
 
-  const { facultyId, ratings, positiveComment, improvementComment, academicYear } = req.body;
+  const { facultyId, ratings, positiveComment, improvementComment, overallComment, academicYear } = req.body;
   const year = academicYear || CURRENT_YEAR;
   const studentId = req.user._id;
 
@@ -54,10 +54,24 @@ const submitFeedback = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Faculty member not found or inactive.' });
     }
 
-    // 2. Student and faculty must share the same department
-    if (req.user.department && faculty.department &&
-        req.user.department.toLowerCase() !== faculty.department.toLowerCase()) {
-      return res.status(403).json({ success: false, message: 'You can only submit feedback for faculty in your department.' });
+    // 2. Student and faculty must share the same department (normalized matching)
+    if (req.user.department && faculty.department) {
+      const sDept = req.user.department.trim().toLowerCase();
+      const fDept = faculty.department.trim().toLowerCase();
+      const isCse = (d) => d.includes('computer') || d.includes('cse');
+      const isIt  = (d) => d.includes('information') || d === 'it';
+      const isEce = (d) => d.includes('electronics') || d === 'ece';
+      const isIot = (d) => d.includes('things') || d === 'iot';
+
+      const match = sDept === fDept ||
+        (isCse(sDept) && isCse(fDept)) ||
+        (isIt(sDept) && isIt(fDept)) ||
+        (isEce(sDept) && isEce(fDept)) ||
+        (isIot(sDept) && isIot(fDept));
+
+      if (!match) {
+        return res.status(403).json({ success: false, message: 'You can only submit feedback for faculty in your department.' });
+      }
     }
 
     // 3. Duplicate check
@@ -77,6 +91,11 @@ const submitFeedback = async (req, res, next) => {
         return res.status(400).json({ success: false, message: `A reason (min 5 chars) is required for "${r.label || r.questionKey}".` });
     }
 
+    // Validate overall comment if required
+    if (overallComment !== undefined && overallComment.trim().length < 5) {
+      return res.status(400).json({ success: false, message: 'Please provide an overall comment of at least 5 characters.' });
+    }
+
     // 5. Generate server-side anonymous token (no student data used)
     const anonymousToken = crypto.randomUUID();
 
@@ -87,8 +106,9 @@ const submitFeedback = async (req, res, next) => {
       department: faculty.department,
       anonymousToken,
       ratings,
-      positiveComment:    positiveComment    || undefined,
-      improvementComment: improvementComment || undefined,
+      positiveComment:    positiveComment    ? positiveComment.trim()    : undefined,
+      improvementComment: improvementComment ? improvementComment.trim() : undefined,
+      overallComment:     overallComment     ? overallComment.trim()     : undefined,
     });
 
     // 6b. Record submission in voter roll (student linked, no content)
@@ -148,6 +168,7 @@ const saveDraft = async (req, res, next) => {
         ratings:            req.body.ratings            || [],
         positiveComment:    req.body.positiveComment    || '',
         improvementComment: req.body.improvementComment || '',
+        overallComment:     req.body.overallComment     || '',
         lastSaved: new Date(),
       },
       { upsert: true, new: true, runValidators: true }
