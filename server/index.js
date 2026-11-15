@@ -18,10 +18,10 @@ const startServer = async () => {
   // connectDB() will NOT throw on failure — it logs and continues.
   await connectDB();
 
-  app.listen(PORT, () => {
-    console.log(`🚀  Server running at http://localhost:${PORT}`);
-    console.log(`🏥  Health check:   http://localhost:${PORT}/api/health`);
-  });
+  app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Health check: /api/health`);
+});
 };
 
 startServer();

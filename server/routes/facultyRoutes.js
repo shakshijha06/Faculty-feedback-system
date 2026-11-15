@@ -1,7 +1,9 @@
 /**
  * routes/facultyRoutes.js
  *
- * GET    /api/faculty         — any authenticated user (active faculty only)
+ * GET    /api/faculty         — any authenticated user (active faculty only, supports ?q=)
+ * GET    /api/faculty/search  — any authenticated user (search by name, initials, abbr)
+ * GET    /api/faculty/my-department — authenticated student
  * GET    /api/faculty/all     — admin only (all incl. inactive)
  * GET    /api/faculty/:id     — any authenticated user
  * GET    /api/faculty/:id/stats — admin only (aggregated feedback)
@@ -14,8 +16,16 @@
 const express = require('express');
 const { body } = require('express-validator');
 const {
-  getAllFaculty, getAllFacultyIncludingInactive, getMyDepartmentFaculty, getFacultyById,
-  getFacultyStats, createFaculty, updateFaculty, deactivateFaculty, reactivateFaculty,
+  getAllFaculty,
+  searchFaculty,
+  getAllFacultyIncludingInactive,
+  getMyDepartmentFaculty,
+  getFacultyById,
+  getFacultyStats,
+  createFaculty,
+  updateFaculty,
+  deactivateFaculty,
+  reactivateFaculty,
 } = require('../controllers/facultyController');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
 
@@ -32,6 +42,7 @@ const facultyValidation = [
 
 // IMPORTANT: specific routes before parameterised ones to avoid route conflicts
 router.get('/my-department',          protect, getMyDepartmentFaculty);
+router.get('/search',                 protect, searchFaculty);
 router.get('/all',                    protect, adminOnly, getAllFacultyIncludingInactive);
 router.get('/',                       protect, getAllFaculty);
 router.get('/:id/stats',              protect, adminOnly, getFacultyStats);

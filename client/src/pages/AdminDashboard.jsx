@@ -9,10 +9,12 @@
  *                         and historical results archive with dedicated modal inspection
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Users, GraduationCap, MessageSquareCheck, Award, Search, X, Plus } from 'lucide-react';
 import api from '../services/api';
 import { DEPARTMENTS, SEMESTERS, FEEDBACK_FACTORS } from '../constants/academicData';
+import { matchesFacultySearch, getEffectiveInitials } from '../utils/facultySearch';
 
 // ── Reusable Accessible Modal Component ──────────────────────────────────────
 const Modal = ({ title, onClose, children, maxWidth = 680 }) => {
@@ -92,29 +94,33 @@ const OverviewTab = ({ onTabChange }) => {
   if (!stats) return null;
 
   const cards = [
-    { label: 'Registered Students', value: stats.studentCount, sub: `${stats.activeStudentCount || 0} active accounts`, icon: '👤', color: '#4f46e5' },
-    { label: 'Faculty Members', value: stats.facultyCount, sub: 'in academic directory', icon: '👨‍🏫', color: '#06b6d4' },
-    { label: 'Feedback Submissions', value: stats.submissionCount, sub: 'total anonymous reviews', icon: '📝', color: '#22c55e' },
-    { label: 'Award Cycles', value: cycleInfo.active, sub: `${cycleInfo.closed} previous cycles archived`, icon: '🏆', color: '#f59e0b' },
+    { label: 'Registered Students', value: stats.studentCount, sub: `${stats.activeStudentCount || 0} active accounts`, icon: <Users size={20} /> },
+    { label: 'Faculty Members', value: stats.facultyCount, sub: 'in academic directory', icon: <GraduationCap size={20} /> },
+    { label: 'Feedback Submissions', value: stats.submissionCount, sub: 'total anonymous reviews', icon: <MessageSquareCheck size={20} /> },
+    { label: 'Award Cycles', value: cycleInfo.active, sub: `${cycleInfo.closed} previous cycles archived`, icon: <Award size={20} /> },
   ];
 
   return (
     <>
-      <div className="grid-3" style={{ marginBottom: '1.5rem' }}>
+      <div className="grid-4" style={{ marginBottom: '1.5rem' }}>
         {cards.map(c => (
-          <div key={c.label} className="card" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '2rem', marginBottom: '.35rem' }}>{c.icon}</div>
-            <div style={{ fontSize: '2.2rem', fontWeight: 700, color: c.color }}>{c.value ?? '–'}</div>
-            <div style={{ fontWeight: 600, fontSize: '.9rem' }}>{c.label}</div>
-            <div style={{ color: 'var(--clr-text-muted)', fontSize: '.78rem', marginTop: '.2rem' }}>{c.sub}</div>
+          <div key={c.label} className="stat-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '.5rem' }}>
+              <span className="stat-card-label">{c.label}</span>
+              <span style={{ color: 'var(--clr-primary)', backgroundColor: 'var(--clr-primary-subtle)', padding: '.35rem', borderRadius: 'var(--radius-xs)', display: 'inline-flex' }}>
+                {c.icon}
+              </span>
+            </div>
+            <div className="stat-card-value">{c.value ?? '–'}</div>
+            <div className="stat-card-sub">{c.sub}</div>
           </div>
         ))}
       </div>
 
       <div className="card">
-        <h3 style={{ fontWeight: 600, marginBottom: '.75rem' }}>Administrative Controls</h3>
+        <h3 style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '.35rem', color: 'var(--clr-text)' }}>Administrative Quick Actions</h3>
         <p style={{ color: 'var(--clr-text-muted)', fontSize: '.84rem', marginBottom: '1rem' }}>
-          Quickly navigate to student management, faculty reviews, or award nomination cycles.
+          Quickly navigate to student management, faculty performance evaluations, or award nomination cycles.
         </p>
         <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
           <button className="btn btn-primary btn-sm" onClick={() => onTabChange('students')}>Manage Students</button>
@@ -518,6 +524,7 @@ const FacultyTab = () => {
   const [selectedFaculty, setSelectedFaculty] = useState(null);
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [form, setForm] = useState({
     name: '',
@@ -608,7 +615,7 @@ const FacultyTab = () => {
   const openEdit = (f) => {
     setForm({
       name: f.name,
-      abbreviation: f.abbreviation || '',
+      abbreviation: f.abbreviation || getEffectiveInitials(f),
       employeeId: f.employeeId,
       department: f.department || DEPARTMENTS[0].value,
       designation: f.designation || '',
@@ -618,18 +625,50 @@ const FacultyTab = () => {
     setFormError('');
   };
 
+  const filteredFaculty = useMemo(() => {
+    if (!searchQuery.trim()) return faculty;
+    return faculty.filter(f => matchesFacultySearch(f, searchQuery));
+  }, [faculty, searchQuery]);
+
   return (
     <>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <h3 style={{ fontWeight: 600 }}>Faculty Directory</h3>
+            <h3 style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--clr-text)' }}>Faculty Directory &amp; Timetable Registry</h3>
             <p style={{ color: 'var(--clr-text-muted)', fontSize: '.84rem' }}>
-              Click any faculty name to view anonymous feedback analytics and evaluation score distributions.
+              Manage active faculty members, verified timetable initials, and inspect aggregated performance metrics.
             </p>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={() => { resetForm(); setShowCreate(true); }}>+ Add Faculty</button>
+          <button className="btn btn-primary btn-sm" onClick={() => { resetForm(); setShowCreate(true); }}>
+            <Plus size={15} /> Add Faculty Member
+          </button>
+        </div>
+
+        {/* Directory Search Bar */}
+        <div className="directory-search-bar" style={{ marginBottom: '1.25rem' }}>
+          <Search size={18} className="directory-search-icon" aria-hidden="true" />
+          <input
+            type="text"
+            className="directory-search-input"
+            placeholder="Search faculty by full name or timetable initials (e.g., Anirban Das, AKD)..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="directory-search-clear"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search filter"
+            >
+              <X size={16} />
+            </button>
+          )}
+          <span className="directory-match-counter">
+            {filteredFaculty.length} of {faculty.length} Faculty
+          </span>
         </div>
 
         {loading && <div className="spinner-wrap"><div className="spinner" /></div>}
@@ -638,13 +677,25 @@ const FacultyTab = () => {
           <p style={{ color: 'var(--clr-text-muted)', textAlign: 'center', padding: '2rem' }}>No faculty members added yet.</p>
         )}
 
-        {!loading && faculty.length > 0 && (
-          <div style={{ overflowX: 'auto' }}>
+        {!loading && faculty.length > 0 && filteredFaculty.length === 0 && (
+          <div className="search-empty-state">
+            <div className="search-empty-title">No Matching Faculty Found</div>
+            <p className="search-empty-desc">
+              No faculty member matches "{searchQuery}". Try searching by full name, first name, last name, or initials.
+            </p>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSearchQuery('')}>
+              Clear Search Filter
+            </button>
+          </div>
+        )}
+
+        {!loading && filteredFaculty.length > 0 && (
+          <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
                   <th>Faculty Name</th>
-                  <th>Abbreviation</th>
+                  <th>Timetable Initials</th>
                   <th>Employee ID</th>
                   <th>Department</th>
                   <th>Designation</th>
@@ -653,36 +704,45 @@ const FacultyTab = () => {
                 </tr>
               </thead>
               <tbody>
-                {faculty.map(f => (
-                  <tr key={f._id}>
-                    <td>
-                      <button
-                        className="btn-link"
-                        style={{ textAlign: 'left', fontWeight: 600, color: 'var(--clr-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                        onClick={() => openStats(f)}
-                        title="Click to view detailed feedback analytics"
-                      >
-                        {f.name}
-                      </button>
-                    </td>
-                    <td>{f.abbreviation || '—'}</td>
-                    <td>{f.employeeId}</td>
-                    <td>{f.department}</td>
-                    <td>{f.designation || '—'}</td>
-                    <td>
-                      <span className={`badge ${f.isActive ? 'badge-green' : 'badge-red'}`}>
-                        {f.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <button className="btn btn-secondary btn-sm" style={{ marginRight: '.4rem' }} onClick={() => openEdit(f)}>Edit</button>
-                      {f.isActive
-                        ? <button className="btn btn-danger btn-sm" onClick={() => handleDeactivate(f)}>Deactivate</button>
-                        : <button className="btn btn-secondary btn-sm" onClick={() => handleReactivate(f)}>Reactivate</button>
-                      }
-                    </td>
-                  </tr>
-                ))}
+                {filteredFaculty.map(f => {
+                  const initials = getEffectiveInitials(f);
+                  return (
+                    <tr key={f._id}>
+                      <td>
+                        <button
+                          className="btn-link"
+                          style={{ textAlign: 'left', fontWeight: 600 }}
+                          onClick={() => openStats(f)}
+                          title="Click to view detailed feedback analytics"
+                        >
+                          {f.name}
+                        </button>
+                      </td>
+                      <td>
+                        {initials ? (
+                          <span className="badge badge-blue" style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                            {initials}
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td>{f.employeeId}</td>
+                      <td>{f.department}</td>
+                      <td>{f.designation || '—'}</td>
+                      <td>
+                        <span className={`badge ${f.isActive ? 'badge-green' : 'badge-red'}`}>
+                          {f.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <button className="btn btn-secondary btn-sm" style={{ marginRight: '.4rem' }} onClick={() => openEdit(f)}>Edit</button>
+                        {f.isActive
+                          ? <button className="btn btn-danger btn-sm" onClick={() => handleDeactivate(f)}>Deactivate</button>
+                          : <button className="btn btn-secondary btn-sm" onClick={() => handleReactivate(f)}>Reactivate</button>
+                        }
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -834,16 +894,20 @@ const FacultyTab = () => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="cf-abbr" className="form-label">Faculty Abbreviation</label>
+              <label htmlFor="cf-abbr" className="form-label">
+                Timetable Initials / Routine Abbreviation
+              </label>
               <input
                 id="cf-abbr"
                 type="text"
                 className="form-input"
-                placeholder="e.g. Dr. AK or Dr. SKG"
+                placeholder="e.g. AKD, A.K.D., SKG (leave blank to auto-generate)"
                 value={form.abbreviation}
-                onChange={e => setForm(v => ({ ...v, abbreviation: e.target.value }))}
+                onChange={e => setForm(v => ({ ...v, abbreviation: e.target.value.toUpperCase() }))}
               />
-              
+              <p className="form-hint">
+                Used on college timetables &amp; routines. If left blank, initials will be derived automatically from the faculty member's name.
+              </p>
             </div>
 
             <div className="form-group">
@@ -1126,7 +1190,7 @@ const AwardsTab = ({ currentSubTab = 'cycles', onSubTabChange }) => {
 
           {activeCycles.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '2.5rem 1rem' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '.5rem' }}>🏆</div>
+              <div style={{ fontSize: '2rem', marginBottom: '.5rem' }}></div>
               <p style={{ color: 'var(--clr-text-muted)', marginBottom: '1rem' }}>
                 No active nomination cycles are currently open. Create a new cycle or reopen a previous cycle from Cycle History.
               </p>
@@ -1160,7 +1224,7 @@ const AwardsTab = ({ currentSubTab = 'cycles', onSubTabChange }) => {
                       <td>{c.academicYear}</td>
                       <td>
                         <span className="badge badge-green">
-                          🟢 Open (Active)
+                           Open (Active)
                         </span>
                       </td>
                       <td>
@@ -1211,7 +1275,7 @@ const AwardsTab = ({ currentSubTab = 'cycles', onSubTabChange }) => {
               Faculty members ranked by total student nominations received during the current cycle.
             </p>
             <div className="alert alert-info" style={{ marginTop: '.75rem', fontSize: '.84rem' }}>
-              ℹ️ <strong>Institutional Notice:</strong> These rankings represent student nominations and do not constitute a final institutional award decision. Final award selections are determined by authorized college authorities.
+               <strong>Institutional Notice:</strong> These rankings represent student nominations and do not constitute a final institutional award decision. Final award selections are determined by authorized college authorities.
             </div>
           </div>
 
@@ -1326,7 +1390,7 @@ const AwardsTab = ({ currentSubTab = 'cycles', onSubTabChange }) => {
                       <td>{c.academicYear}</td>
                       <td>
                         <span className={`badge ${c.isDeleted ? 'badge-slate' : 'badge-slate'}`}>
-                          {c.isDeleted ? '📁 Archived (Deleted)' : '🔴 Closed'}
+                          {c.isDeleted ? ' Archived (Deleted)' : ' Closed'}
                         </span>
                       </td>
                       <td>
@@ -1389,7 +1453,7 @@ const AwardsTab = ({ currentSubTab = 'cycles', onSubTabChange }) => {
           </div>
 
           <div className="alert alert-info" style={{ fontSize: '.82rem', marginBottom: '1.25rem' }}>
-            ℹ️ <strong>Historical Record:</strong> These results reflect student nominations submitted during this cycle and do not constitute a final institutional award decision.
+             <strong>Historical Record:</strong> These results reflect student nominations submitted during this cycle and do not constitute a final institutional award decision.
           </div>
 
           {historyLoading && <div className="spinner-wrap"><div className="spinner" /> Loading historical rankings…</div>}

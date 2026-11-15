@@ -1,10 +1,13 @@
 /**
  * controllers/facultyController.js
  *
- * Admin-only CRUD for faculty members + per-faculty stats endpoint.
+ * Admin-only CRUD for faculty members + per-faculty stats endpoint
+ * + Faculty search supporting full name, first/last name, timetable initials, and abbreviations.
  *
  * API:
- *   GET    /api/faculty              — list all active faculty
+ *   GET    /api/faculty              — list active faculty (supports ?q= or ?search=)
+ *   GET    /api/faculty/search       — search active faculty by name/initials (?q=...)
+ *   GET    /api/faculty/my-department — active faculty for student's department (supports ?q=)
  *   GET    /api/faculty/all          — list all faculty incl. inactive (admin)
  *   GET    /api/faculty/:id          — get one faculty member
  *   GET    /api/faculty/:id/stats    — aggregated feedback stats (admin only)
@@ -19,6 +22,11 @@ const FacultyAssignment = require('../models/FacultyAssignment');
 const FeedbackSubmission = require('../models/FeedbackSubmission');
 const { validationResult } = require('express-validator');
 const { isDBConnected } = require('../config/db');
+const {
+  generateInitials,
+  getEffectiveInitials,
+  matchesFacultySearch,
+} = require('../utils/facultySearch');
 
 const requireDB = (res) => {
   if (!isDBConnected()) {
@@ -28,11 +36,51 @@ const requireDB = (res) => {
   return true;
 };
 
-// GET /api/faculty — active faculty only
+// Formats a faculty document ensuring verified/generated initials are always populated
+const formatFaculty = (doc) => {
+  const f = doc && doc.toObject ? doc.toObject() : { ...doc };
+  if (!f.abbreviation || !f.abbreviation.trim()) {
+    f.abbreviation = generateInitials(f.name);
+  } else {
+    f.abbreviation = f.abbreviation.trim().toUpperCase();
+  }
+  return f;
+};
+
+// GET /api/faculty — active faculty only, with optional ?q= or ?search= filter
 const getAllFaculty = async (req, res, next) => {
   if (!requireDB(res)) return;
   try {
-    const faculty = await Faculty.find({ isActive: true }).sort({ name: 1 });
+    const rawFaculty = await Faculty.find({ isActive: true }).sort({ name: 1 });
+    let faculty = rawFaculty.map(formatFaculty);
+
+    const q = (req.query.q || req.query.search || '').trim();
+    if (q) {
+      faculty = faculty.filter(f => matchesFacultySearch(f, q));
+    }
+
+    res.status(200).json({ success: true, count: faculty.length, data: faculty });
+  } catch (err) { next(err); }
+};
+
+/**
+ * GET /api/faculty/search?q=... (authenticated)
+ * Dedicated search endpoint for finding faculty across name, initials, and timetable abbreviations.
+ */
+const searchFaculty = async (req, res, next) => {
+  if (!requireDB(res)) return;
+  try {
+    const q = (req.query.q || req.query.search || '').trim();
+    const query = { isActive: true };
+
+    // If student has a department, we can prioritize or scope, but allow finding all active faculty
+    const rawFaculty = await Faculty.find(query).sort({ name: 1 });
+    let faculty = rawFaculty.map(formatFaculty);
+
+    if (q) {
+      faculty = faculty.filter(f => matchesFacultySearch(f, q));
+    }
+
     res.status(200).json({ success: true, count: faculty.length, data: faculty });
   } catch (err) { next(err); }
 };
@@ -45,14 +93,14 @@ const getAllFaculty = async (req, res, next) => {
  * canonical "Computer Science and Engineering".
  *
  * If the student has no department set, returns all active faculty so they still see data.
+ * Also supports optional ?q= or ?search= query parameter.
  */
 const getMyDepartmentFaculty = async (req, res, next) => {
   if (!requireDB(res)) return;
   try {
     const query = { isActive: true };
-    if (req.user.department) {
+    if (req.user && req.user.department) {
       const studentDept = req.user.department.trim();
-      // Handle common variations: "Computer Science", "CSE", "Computer Science and Engineering"
       let regexPattern = `^${studentDept}$`;
       if (/computer\s*science/i.test(studentDept) || /^cse$/i.test(studentDept)) {
         regexPattern = 'computer\\s*science|cse';
@@ -65,17 +113,30 @@ const getMyDepartmentFaculty = async (req, res, next) => {
       }
       query.department = { $regex: new RegExp(regexPattern, 'i') };
     }
-    const faculty = await Faculty.find(query).sort({ name: 1 });
+    const rawFaculty = await Faculty.find(query).sort({ name: 1 });
+    let faculty = rawFaculty.map(formatFaculty);
+
+    const q = (req.query.q || req.query.search || '').trim();
+    if (q) {
+      faculty = faculty.filter(f => matchesFacultySearch(f, q));
+    }
+
     res.status(200).json({ success: true, count: faculty.length, data: faculty });
   } catch (err) { next(err); }
 };
-
 
 // GET /api/faculty/all — all including inactive (admin use)
 const getAllFacultyIncludingInactive = async (req, res, next) => {
   if (!requireDB(res)) return;
   try {
-    const faculty = await Faculty.find().sort({ name: 1 });
+    const rawFaculty = await Faculty.find().sort({ name: 1 });
+    let faculty = rawFaculty.map(formatFaculty);
+
+    const q = (req.query.q || req.query.search || '').trim();
+    if (q) {
+      faculty = faculty.filter(f => matchesFacultySearch(f, q));
+    }
+
     res.status(200).json({ success: true, count: faculty.length, data: faculty });
   } catch (err) { next(err); }
 };
@@ -86,13 +147,12 @@ const getFacultyById = async (req, res, next) => {
   try {
     const faculty = await Faculty.findById(req.params.id);
     if (!faculty) return res.status(404).json({ success: false, message: 'Faculty not found.' });
-    res.status(200).json({ success: true, data: faculty });
+    res.status(200).json({ success: true, data: formatFaculty(faculty) });
   } catch (err) { next(err); }
 };
 
 /**
  * GET /api/faculty/:id/stats  (admin only)
- *
  * Aggregates all FeedbackSubmissions for this faculty.
  * PRIVACY: returns only aggregated averages, score distributions, and anonymous comments — zero student identifiers.
  */
@@ -109,15 +169,13 @@ const getFacultyStats = async (req, res, next) => {
       reasons: {},
     };
 
-    // Find submissions directly by faculty ID
     const submissions = await FeedbackSubmission.find({ faculty: req.params.id }).sort({ createdAt: -1 });
     if (!submissions || submissions.length === 0) return res.status(200).json(empty);
 
-    // Aggregate per-question scores & rating distribution
     const scoreSums = {};
     const scoreCounts = {};
-    const ratingDistributions = {}; // { questionKey: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } }
-    const reasons = {};             // { questionKey: ['reason 1', 'reason 2'] }
+    const ratingDistributions = {};
+    const reasons = {};
     let totalScoreSum = 0;
     let totalScoreCount = 0;
 
@@ -153,7 +211,6 @@ const getFacultyStats = async (req, res, next) => {
       ? parseFloat((totalScoreSum / totalScoreCount).toFixed(2))
       : null;
 
-    // Anonymous comments — no student identifiers whatsoever
     const comments = submissions
       .filter(s => s.positiveComment || s.improvementComment || s.overallComment)
       .map(s => ({
@@ -186,13 +243,16 @@ const createFaculty = async (req, res, next) => {
   try {
     const payload = { ...req.body };
     if (!payload.email || !payload.email.trim()) {
-      delete payload.email; // avoid empty string violating email regex or unique null index
+      delete payload.email;
     }
-    if (payload.abbreviation && typeof payload.abbreviation === 'string') {
-      payload.abbreviation = payload.abbreviation.trim();
+    // Auto-generate abbreviation if not provided, or uppercase and trim if provided
+    if (payload.abbreviation && typeof payload.abbreviation === 'string' && payload.abbreviation.trim()) {
+      payload.abbreviation = payload.abbreviation.trim().toUpperCase();
+    } else if (payload.name) {
+      payload.abbreviation = generateInitials(payload.name);
     }
     const faculty = await Faculty.create(payload);
-    res.status(201).json({ success: true, data: faculty });
+    res.status(201).json({ success: true, data: formatFaculty(faculty) });
   } catch (err) {
     if (err.code === 11000) {
       const field = Object.keys(err.keyValue || {})[0];
@@ -220,12 +280,16 @@ const updateFaculty = async (req, res, next) => {
     if (updateData.email !== undefined && (!updateData.email || !updateData.email.trim())) {
       delete updateData.email;
     }
-    if (updateData.abbreviation !== undefined && typeof updateData.abbreviation === 'string') {
-      updateData.abbreviation = updateData.abbreviation.trim();
+    if (updateData.abbreviation !== undefined) {
+      if (typeof updateData.abbreviation === 'string' && updateData.abbreviation.trim()) {
+        updateData.abbreviation = updateData.abbreviation.trim().toUpperCase();
+      } else if (updateData.name) {
+        updateData.abbreviation = generateInitials(updateData.name);
+      }
     }
     const faculty = await Faculty.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     if (!faculty) return res.status(404).json({ success: false, message: 'Faculty not found.' });
-    res.status(200).json({ success: true, data: faculty });
+    res.status(200).json({ success: true, data: formatFaculty(faculty) });
   } catch (err) { next(err); }
 };
 
@@ -250,6 +314,14 @@ const reactivateFaculty = async (req, res, next) => {
 };
 
 module.exports = {
-  getAllFaculty, getAllFacultyIncludingInactive, getMyDepartmentFaculty, getFacultyById,
-  getFacultyStats, createFaculty, updateFaculty, deactivateFaculty, reactivateFaculty,
+  getAllFaculty,
+  searchFaculty,
+  getAllFacultyIncludingInactive,
+  getMyDepartmentFaculty,
+  getFacultyById,
+  getFacultyStats,
+  createFaculty,
+  updateFaculty,
+  deactivateFaculty,
+  reactivateFaculty,
 };

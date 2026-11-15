@@ -1,20 +1,22 @@
 /**
- * pages/Dashboard.jsx — Student Home Page
+ * pages/Dashboard.jsx — Student Academic Portal Overview
  *
- * Shows:
- *   1. Profile banner: name, enrollment no., department, semester
- *   2. Two primary action cards: Give Feedback | Nominate Faculty
- *
- * No stat cards. No assignment list. Clean two-card design per spec.
+ * Corporate Institutional Design:
+ * - Student Profile banner with enrollment, department, semester metadata
+ * - Primary Action Cards for Feedback and Award of Excellence nominations
+ * - Clean institutional typography and corporate office aesthetics
  */
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { MessageSquareCheck, Award, KeyRound, LogOut, GraduationCap, Building2, Calendar, FileText } from 'lucide-react';
+
+const CURRENT_YEAR = '2024-25';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
-  const navigate          = useNavigate();
+  const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
@@ -24,8 +26,7 @@ const Dashboard = () => {
   return (
     <div className="page">
       <div className="container">
-
-        {/* Profile banner */}
+        {/* Profile Banner */}
         <div className="profile-banner">
           <div>
             <div className="profile-banner-name">
@@ -34,79 +35,103 @@ const Dashboard = () => {
             <div className="profile-banner-meta">
               {user?.rollNumber && (
                 <span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/></svg>
-                  {user.rollNumber}
+                  <GraduationCap size={14} />
+                  Enrollment: <strong>{user.rollNumber}</strong>
                 </span>
               )}
               {user?.department && (
                 <span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                  <Building2 size={14} />
                   {user.department}
                 </span>
               )}
               {user?.semester && (
                 <span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <Calendar size={14} />
                   Semester {user.semester}
                 </span>
               )}
+              <span>
+                <FileText size={14} />
+                Batch Of: {CURRENT_YEAR}
+              </span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '.65rem', flexWrap: 'wrap' }}>
             <button
               className="btn btn-secondary btn-sm"
-              style={{ background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.3)' }}
+              style={{ backgroundColor: 'rgba(255,255,255,.12)', color: '#ffffff', borderColor: 'rgba(255,255,255,.3)' }}
               onClick={() => navigate('/change-password')}
             >
+              <KeyRound size={14} />
               Change Password
             </button>
             <button
               className="btn btn-secondary btn-sm"
-              style={{ background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.3)' }}
+              style={{ backgroundColor: 'rgba(255,255,255,.12)', color: '#ffffff', borderColor: 'rgba(255,255,255,.3)' }}
               onClick={handleLogout}
             >
+              <LogOut size={14} />
               Sign Out
             </button>
           </div>
         </div>
 
-        {/* Two action cards */}
-        <div className="grid-2">
+        {/* Section Heading */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--clr-text)', marginBottom: '.25rem' }}>
+            Academic Evaluation Services
+          </h2>
+          <p style={{ fontSize: '.84rem', color: 'var(--clr-text-muted)' }}>
+            Select an action below to participate in institutional evaluations and faculty excellence recognition.
+          </p>
+        </div>
 
+        {/* Two Primary Action Cards */}
+        <div className="grid-2">
           <div className="action-card">
             <div className="action-card-icon" aria-hidden="true">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <MessageSquareCheck size={24} />
             </div>
             <div className="action-card-title">Submit Semester Feedback</div>
             <div className="action-card-desc">
-              Give feedback on the faculty members relevant to your semester and department.
+              Evaluate professors assigned to your department. Review teaching clarity, subject expertise, approachability, and punctuality with 100% cryptographic anonymity.
             </div>
             <button
               className="btn btn-primary"
-              style={{ alignSelf: 'flex-start', marginTop: '.5rem' }}
+              style={{ alignSelf: 'flex-start' }}
               onClick={() => navigate('/feedback-list')}
             >
-              Give Feedback
+              Access Faculty Feedback List →
             </button>
           </div>
 
           <div className="action-card">
             <div className="action-card-icon" aria-hidden="true">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <Award size={24} />
             </div>
-            <div className="action-card-title">Nominate Faculty</div>
+            <div className="action-card-title">Award of Excellence Nomination</div>
             <div className="action-card-desc">
-              Nominate eligible faculty members for the Award of Excellence.
+              Nominate exemplary educators for institutional recognition. Submit formal citations highlighting teaching quality, mentorship, and academic leadership.
             </div>
             <button
               className="btn btn-primary"
-              style={{ alignSelf: 'flex-start', marginTop: '.5rem' }}
+              style={{ alignSelf: 'flex-start' }}
               onClick={() => navigate('/nominations')}
             >
-              Nominate Faculty
+              Nominate Faculty Member →
             </button>
           </div>
+        </div>
 
+        {/* Institutional Guidelines Notice */}
+        <div className="card" style={{ marginTop: '0.5rem', borderLeft: '4px solid var(--clr-primary)' }}>
+          <h3 style={{ fontSize: '.95rem', fontWeight: 700, marginBottom: '.5rem', color: 'var(--clr-text)' }}>
+            Institutional Evaluation Policy & Privacy Protection
+          </h3>
+          <p style={{ fontSize: '.84rem', color: 'var(--clr-text-secondary)', lineHeight: 1.55 }}>
+            Feedback submissions are completely confidential. Student identification numbers are tracked solely to verify participation and prevent multiple submissions; individual numerical scores and written comments are stored without voter links. For queries regarding course allotments, please contact the Academic Administration Office.
+          </p>
         </div>
       </div>
     </div>

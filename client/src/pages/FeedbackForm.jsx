@@ -1,70 +1,73 @@
 /**
- * pages/FeedbackForm.jsx — Faculty-based anonymous feedback with draft support
+ * pages/FeedbackForm.jsx — Faculty Evaluation Form (Standalone Route)
  *
  * Route: /feedback/:facultyId
  *
- * Flow:
- *   1. Load faculty info + check if already submitted
- *   2. Load saved draft (if any)
- *   3. Student rates each factor 1–5 and provides a mandatory reason
- *   4. "Save Draft" persists progress to MongoDB
- *   5. "Review" → Step 2 (review screen)
- *   6. Submit → POST /api/feedback/submit → Step 3 (success)
+ * Professional corporate styling with draft preservation, 
+ * evaluation ratings, mandatory justifications, review step, and submission.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { CheckCircle2, AlertCircle, Lock, Save, ArrowRight, ArrowLeft } from 'lucide-react';
 import api from '../services/api';
 
 const CURRENT_YEAR = '2024-25';
 
 const QUESTIONS = [
-  { key: 'teaching_clarity',  label: 'Teaching Clarity',  desc: 'How clearly does the faculty explain concepts?' },
-  { key: 'subject_expertise', label: 'Subject Expertise', desc: 'How well does the faculty know the subject?' },
-  { key: 'approachability',   label: 'Approachability',   desc: 'Is the faculty approachable and helpful outside class?' },
-  { key: 'class_preparation', label: 'Class Preparation', desc: 'How well prepared are the lectures and materials?' },
-  { key: 'overall',           label: 'Overall Impression',desc: 'Your overall impression of this faculty member.' },
+  { key: 'teaching_clarity',  label: 'Teaching Clarity & Explanation',  desc: 'How clearly does the faculty explain concepts?' },
+  { key: 'subject_expertise', label: 'Subject Expertise & Knowledge',   desc: 'How thoroughly does the faculty demonstrate subject mastery?' },
+  { key: 'approachability',   label: 'Approachability & Support',       desc: 'Is the faculty accessible and helpful outside class?' },
+  { key: 'class_preparation', label: 'Lecture Preparation & Materials', desc: 'How well prepared are the lectures and study resources?' },
+  { key: 'overall',           label: 'Overall Teaching Effectiveness',  desc: 'Your overall rating of instructional quality.' },
 ];
 
 const initRatings = () =>
   Object.fromEntries(QUESTIONS.map(q => [q.key, { score: 0, reason: '' }]));
 
-// ── Star rating control ───────────────────────────────────────────────────────
-const StarRating = ({ id, value, onChange }) => (
-  <div className="star-row" role="group" aria-labelledby={`q-label-${id}`}>
+// ── Horizontal Segmented 1–5 Rating Control ──────────────────────────────────
+const SegmentedRating = ({ id, value, onChange }) => (
+  <div className="radio-rating-group" role="radiogroup" aria-labelledby={`q-label-${id}`}>
     {[1, 2, 3, 4, 5].map(n => (
-      <button
+      <label
         key={n}
-        type="button"
-        className={`star-btn ${n <= value ? 'star-filled' : 'star-empty'}`}
-        onClick={() => onChange(n)}
-        aria-label={`${n} star${n !== 1 ? 's' : ''}`}
-        aria-pressed={n === value}
-      >★</button>
+        className={`radio-rating-label ${value === n ? 'active' : ''}`}
+        htmlFor={`rating-${id}-${n}`}
+        title={`Rate ${n} of 5`}
+      >
+        <input
+          type="radio"
+          id={`rating-${id}-${n}`}
+          name={`rating-${id}`}
+          value={n}
+          checked={value === n}
+          onChange={() => onChange(n)}
+          className="radio-rating-input"
+        />
+        <span className="radio-num">{n}</span>
+      </label>
     ))}
-    {value > 0 && <span className="star-label">{value}/5</span>}
   </div>
 );
 
 const FeedbackForm = () => {
   const { facultyId } = useParams();
-  const navigate       = useNavigate();
+  const navigate = useNavigate();
 
-  const [step, setStep]               = useState(1);
-  const [faculty, setFaculty]         = useState(null);
-  const [loading, setLoading]         = useState(true);
+  const [step, setStep] = useState(1);
+  const [faculty, setFaculty] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
 
-  const [ratings, setRatings]                   = useState(initRatings());
-  const [positiveComment, setPositiveComment]   = useState('');
+  const [ratings, setRatings] = useState(initRatings());
+  const [positiveComment, setPositiveComment] = useState('');
   const [improvementComment, setImprovementComment] = useState('');
-  const [errors, setErrors]                     = useState({});
-  const [draftSaving, setDraftSaving]           = useState(false);
-  const [draftSaved, setDraftSaved]             = useState(false);
-  const [submitting, setSubmitting]             = useState(false);
-  const [submitError, setSubmitError]           = useState('');
+  const [errors, setErrors] = useState({});
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
-  // Load faculty info, submission status, and draft in parallel
   useEffect(() => {
     const init = async () => {
       try {
@@ -77,7 +80,6 @@ const FeedbackForm = () => {
         if (statusRes.data.hasSubmitted) {
           setAlreadySubmitted(true);
         } else if (draftRes.data.data) {
-          // Restore draft
           const d = draftRes.data.data;
           if (d.ratings?.length) {
             const restored = initRatings();
@@ -92,7 +94,7 @@ const FeedbackForm = () => {
           setImprovementComment(d.improvementComment || '');
         }
       } catch {
-        /* silent — show empty form */
+        /* start clean */
       } finally {
         setLoading(false);
       }
@@ -100,183 +102,267 @@ const FeedbackForm = () => {
     init();
   }, [facultyId]);
 
-  const setScore  = (key, score)  => setRatings(p => ({ ...p, [key]: { ...p[key], score } }));
-  const setReason = (key, reason) => setRatings(p => ({ ...p, [key]: { ...p[key], reason } }));
+  const setScore = (key, score) => {
+    setRatings(p => ({ ...p, [key]: { ...p[key], score } }));
+    if (errors[`${key}_score`]) setErrors(p => ({ ...p, [`${key}_score`]: null }));
+  };
 
-  // Save draft to server
-  const handleSaveDraft = useCallback(async () => {
-    setDraftSaving(true);
-    setDraftSaved(false);
-    try {
-      const ratingsPayload = QUESTIONS.map(q => ({
-        questionKey: q.key, label: q.label,
-        score: ratings[q.key].score,
-        reason: ratings[q.key].reason,
-      }));
-      await api.post(`/api/feedback/draft/${facultyId}`, {
-        ratings: ratingsPayload,
-        positiveComment, improvementComment,
-        academicYear: CURRENT_YEAR,
-      });
-      setDraftSaved(true);
-      setTimeout(() => setDraftSaved(false), 3000);
-    } catch { /* silent */ }
-    finally { setDraftSaving(false); }
-  }, [facultyId, ratings, positiveComment, improvementComment]);
+  const setReason = (key, reason) => {
+    setRatings(p => ({ ...p, [key]: { ...p[key], reason } }));
+    if (errors[`${key}_reason`]) setErrors(p => ({ ...p, [`${key}_reason`]: null }));
+  };
 
-  const validateStep1 = () => {
+  const validate = () => {
     const errs = {};
     QUESTIONS.forEach(q => {
-      if (!ratings[q.key].score)
-        errs[`${q.key}_score`] = 'Please select a rating.';
+      if (!ratings[q.key].score) errs[`${q.key}_score`] = 'Please select a score from 1 to 5.';
       if (!ratings[q.key].reason || ratings[q.key].reason.trim().length < 5)
-        errs[`${q.key}_reason`] = 'Please write at least 5 characters.';
+        errs[`${q.key}_reason`] = 'Please provide an explanation of at least 5 characters.';
     });
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const handleNext = () => { if (validateStep1()) setStep(2); };
+  const handleNext = () => {
+    if (validate()) setStep(2);
+  };
+
+  const handleSaveDraft = async () => {
+    setDraftSaving(true);
+    setDraftSaved(false);
+    try {
+      const payloadRatings = QUESTIONS.map(q => ({
+        questionKey: q.key,
+        label: q.label,
+        score: ratings[q.key].score,
+        reason: ratings[q.key].reason,
+      }));
+      await api.post(`/api/feedback/draft/${facultyId}`, {
+        ratings: payloadRatings,
+        positiveComment,
+        improvementComment,
+        academicYear: CURRENT_YEAR,
+      });
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 3000);
+    } catch {
+      /* silent */
+    } finally {
+      setDraftSaving(false);
+    }
+  };
 
   const handleSubmit = async () => {
-    setSubmitError('');
     setSubmitting(true);
+    setSubmitError('');
     try {
+      const payloadRatings = QUESTIONS.map(q => ({
+        questionKey: q.key,
+        label: q.label,
+        score: ratings[q.key].score,
+        reason: ratings[q.key].reason.trim(),
+      }));
       await api.post('/api/feedback/submit', {
         facultyId,
+        ratings: payloadRatings,
+        positiveComment: positiveComment.trim(),
+        improvementComment: improvementComment.trim(),
         academicYear: CURRENT_YEAR,
-        ratings: QUESTIONS.map(q => ({
-          questionKey: q.key, label: q.label,
-          score: ratings[q.key].score,
-          reason: ratings[q.key].reason.trim(),
-        })),
-        positiveComment:    positiveComment.trim()    || undefined,
-        improvementComment: improvementComment.trim() || undefined,
       });
       setStep(3);
     } catch (err) {
-      setSubmitError(err.message || 'Submission failed. Please try again.');
-    } finally { setSubmitting(false); }
+      setSubmitError(err.message || 'Submission failed. Please check your answers and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  if (loading) return <div className="spinner-wrap"><div className="spinner" />Loading…</div>;
-
-  // Already submitted
-  if (alreadySubmitted) return (
-    <div className="page"><div className="container" style={{ maxWidth: 560 }}>
-      <div className="card" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✓</div>
-        <h2 style={{ fontWeight: 700, marginBottom: '.5rem' }}>Already Submitted</h2>
-        <p style={{ color: 'var(--clr-text-muted)', marginBottom: '1.5rem' }}>
-          You have already submitted feedback for {faculty?.name || 'this faculty member'}.
-        </p>
-        <button className="btn btn-primary" onClick={() => navigate('/feedback-list')}>Back to Faculty List</button>
+  if (loading) {
+    return (
+      <div className="spinner-wrap">
+        <div className="spinner" /> Loading faculty evaluation…
       </div>
-    </div></div>
-  );
+    );
+  }
 
-  // Step 3: Success
-  if (step === 3) return (
-    <div className="page"><div className="container" style={{ maxWidth: 560 }}>
-      <div className="card" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1rem', color: 'var(--clr-success)' }}>✓</div>
-        <h2 style={{ fontWeight: 700, marginBottom: '.5rem' }}>Feedback Submitted</h2>
-        <p style={{ color: 'var(--clr-text-muted)', marginBottom: '1rem' }}>
-          Thank you. Your response has been recorded for <strong>{faculty?.name}</strong>.
-        </p>
-        <div className="alert alert-info" style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
-          Your identity is <strong>not linked</strong> to your answers. Faculty see only aggregate scores.
-        </div>
-        <button className="btn btn-primary" onClick={() => navigate('/feedback-list')}>Back to Faculty List</button>
-      </div>
-    </div></div>
-  );
-
-  // Step 2: Review
-  if (step === 2) return (
-    <div className="page"><div className="container" style={{ maxWidth: 680 }}>
-      <button className="btn-back" onClick={() => setStep(1)}>← Edit responses</button>
-      <h1 className="page-title">Review Your Feedback</h1>
-      <p className="page-subtitle">Review before submitting. You cannot change answers after submission.</p>
-      {submitError && <div className="alert alert-error" role="alert">{submitError}</div>}
-
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3 style={{ fontWeight: 700, marginBottom: '1rem' }}>Ratings &amp; Reasons</h3>
-        {QUESTIONS.map(q => (
-          <div key={q.key} style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--clr-border)' }}>
-            <p style={{ fontWeight: 600, marginBottom: '.3rem' }}>{q.label}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '.25rem', marginBottom: '.3rem' }}>
-              {[1,2,3,4,5].map(n => (
-                <span key={n} style={{ fontSize: '1.2rem', color: n <= ratings[q.key].score ? '#f59e0b' : '#d1d5db' }}>★</span>
-              ))}
-              <span style={{ marginLeft: '.5rem', fontSize: '.82rem', color: 'var(--clr-text-muted)' }}>{ratings[q.key].score}/5</span>
+  if (alreadySubmitted) {
+    return (
+      <div className="page">
+        <div className="container" style={{ maxWidth: 600 }}>
+          <button className="btn-back" onClick={() => navigate('/feedback-list')}>← Back to Faculty List</button>
+          <div className="card" style={{ textAlign: 'center', padding: '2.5rem 2rem' }}>
+            <div style={{ width: 44, height: 44, borderRadius: '50%', backgroundColor: 'var(--clr-success-bg)', color: 'var(--clr-success)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem auto' }}>
+              <CheckCircle2 size={24} />
             </div>
-            <p style={{ fontSize: '.88rem', color: 'var(--clr-text)', fontStyle: 'italic' }}>"{ratings[q.key].reason}"</p>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '.5rem', color: 'var(--clr-text)' }}>
+              Feedback Already Submitted
+            </h2>
+            <p style={{ color: 'var(--clr-text-secondary)', fontSize: '.88rem', marginBottom: '1.5rem' }}>
+              You have already evaluated {faculty?.name || 'this faculty member'} for Academic Term {CURRENT_YEAR}. Submissions cannot be modified once committed.
+            </p>
+            <button className="btn btn-primary" onClick={() => navigate('/feedback-list')}>
+              Return to Faculty List
+            </button>
           </div>
-        ))}
-        {positiveComment && (
-          <div style={{ marginBottom: '.75rem' }}>
-            <p style={{ fontWeight: 600, fontSize: '.82rem', color: 'var(--clr-text-muted)', marginBottom: '.25rem' }}>WHAT YOU APPRECIATED</p>
-            <p style={{ fontSize: '.9rem' }}>{positiveComment}</p>
-          </div>
-        )}
-        {improvementComment && (
-          <div>
-            <p style={{ fontWeight: 600, fontSize: '.82rem', color: 'var(--clr-text-muted)', marginBottom: '.25rem' }}>SUGGESTIONS</p>
-            <p style={{ fontSize: '.9rem' }}>{improvementComment}</p>
-          </div>
-        )}
-        <div className="alert alert-info" style={{ marginTop: '1rem', marginBottom: 0 }}>
-          Submitting is <strong>anonymous</strong> — your name is not attached to these responses.
         </div>
       </div>
+    );
+  }
 
-      <div style={{ display: 'flex', gap: '1rem' }}>
-        <button className="btn btn-secondary" onClick={() => setStep(1)}>← Go Back</button>
-        <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleSubmit} disabled={submitting}>
-          {submitting ? 'Submitting…' : 'Submit Anonymously'}
-        </button>
+  // Step 3: Confirmation
+  if (step === 3) {
+    return (
+      <div className="page">
+        <div className="container" style={{ maxWidth: 600 }}>
+          <div className="card" style={{ textAlign: 'center', padding: '2.5rem 2rem' }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', backgroundColor: 'var(--clr-success-bg)', color: 'var(--clr-success)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem auto' }}>
+              <CheckCircle2 size={28} />
+            </div>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '.5rem', color: 'var(--clr-text)' }}>
+              Evaluation Recorded Anonymously
+            </h2>
+            <p style={{ color: 'var(--clr-text-secondary)', fontSize: '.88rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              Thank you. Your feedback for <strong>{faculty?.name}</strong> has been registered. Your student credentials remain decoupled from these evaluation metrics.
+            </p>
+            <button className="btn btn-primary" onClick={() => navigate('/feedback-list')}>
+              Return to Faculty List
+            </button>
+          </div>
+        </div>
       </div>
-    </div></div>
-  );
+    );
+  }
+
+  // Step 2: Review Screen
+  if (step === 2) {
+    return (
+      <div className="page">
+        <div className="container" style={{ maxWidth: 720 }}>
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Review Feedback — {faculty?.name}</h1>
+              <p className="page-subtitle">Verify your ratings and written remarks before final commitment.</p>
+            </div>
+          </div>
+
+          {submitError && (
+            <div className="alert alert-error" role="alert">
+              <AlertCircle size={16} /> <div>{submitError}</div>
+            </div>
+          )}
+
+          <div className="card" style={{ marginBottom: '1.25rem' }}>
+            <h3 style={{ fontSize: '.95rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--clr-text)' }}>
+              Rating Criteria Summary
+            </h3>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Evaluation Criterion</th>
+                    <th style={{ width: '80px', textAlign: 'center' }}>Score</th>
+                    <th>Reason / Justification</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {QUESTIONS.map(q => (
+                    <tr key={q.key}>
+                      <td style={{ fontWeight: 600 }}>{q.label}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="badge badge-blue">{ratings[q.key].score} / 5</span>
+                      </td>
+                      <td style={{ fontSize: '.84rem', color: 'var(--clr-text-secondary)' }}>{ratings[q.key].reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {(positiveComment || improvementComment) && (
+            <div className="card" style={{ marginBottom: '1.25rem' }}>
+              <h3 style={{ fontSize: '.95rem', fontWeight: 700, marginBottom: '.75rem', color: 'var(--clr-text)' }}>
+                Additional Commentary
+              </h3>
+              {positiveComment && (
+                <div style={{ marginBottom: '.75rem' }}>
+                  <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--clr-text-muted)', textTransform: 'uppercase' }}>Strengths:</div>
+                  <p style={{ fontSize: '.86rem', color: 'var(--clr-text)' }}>{positiveComment}</p>
+                </div>
+              )}
+              {improvementComment && (
+                <div>
+                  <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--clr-text-muted)', textTransform: 'uppercase' }}>Recommendations:</div>
+                  <p style={{ fontSize: '.86rem', color: 'var(--clr-text)' }}>{improvementComment}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+            <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={submitting}>
+              <ArrowLeft size={15} /> Edit Answers
+            </button>
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting} style={{ minWidth: '180px' }}>
+              {submitting ? 'Committing…' : 'Confirm & Submit Feedback'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Step 1: Rating form
   return (
     <div className="page">
-      <div className="container" style={{ maxWidth: 680 }}>
+      <div className="container" style={{ maxWidth: 720 }}>
         <button className="btn-back" onClick={() => navigate('/feedback-list')}>← Back to Faculty List</button>
+
         {faculty && (
-          <div style={{ marginBottom: '1.25rem' }}>
-            <h1 className="page-title" style={{ marginBottom: '.2rem' }}>Feedback — {faculty.name}</h1>
-            <p style={{ color: 'var(--clr-text-muted)', fontSize: '.9rem' }}>
-              {faculty.designation}{faculty.designation && faculty.department ? ' · ' : ''}{faculty.department}
-            </p>
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Feedback — {faculty.name}</h1>
+              <p className="page-subtitle">
+                {faculty.designation}{faculty.designation && faculty.department ? ' · ' : ''}{faculty.department}
+              </p>
+            </div>
           </div>
         )}
-        <div className="alert alert-info" style={{ marginBottom: '1.5rem' }}>
-          This feedback is <strong>anonymous</strong>. Your name will not be linked to your responses.
-          {draftSaved && <strong style={{ marginLeft: '.5rem', color: 'var(--clr-success)' }}>Draft saved.</strong>}
+
+        <div className="alert alert-info">
+          <Lock size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+          <div>
+            This evaluation is <strong>confidential and anonymous</strong>. Your responses are not linked to your student profile.
+            {draftSaved && <span style={{ marginLeft: '.5rem', color: 'var(--clr-success)', fontWeight: 600 }}>✓ Draft saved.</span>}
+          </div>
         </div>
 
-        {QUESTIONS.map(q => (
+        {QUESTIONS.map((q, idx) => (
           <div key={q.key} className="card" style={{ marginBottom: '1rem' }}>
-            <p id={`q-label-${q.key}`} style={{ fontWeight: 700, marginBottom: '.15rem' }}>{q.label}</p>
-            <p style={{ color: 'var(--clr-text-muted)', fontSize: '.83rem', marginBottom: '.75rem' }}>{q.desc}</p>
-            <StarRating id={q.key} value={ratings[q.key].score} onChange={v => setScore(q.key, v)} />
-            {errors[`${q.key}_score`] && <p className="form-error">{errors[`${q.key}_score`]}</p>}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '.75rem', marginBottom: '.65rem' }}>
+              <div style={{ flex: 1, minWidth: '240px' }}>
+                <label id={`q-label-${q.key}`} style={{ fontWeight: 700, fontSize: '.92rem', color: 'var(--clr-text)' }}>
+                  {idx + 1}. {q.label} <span style={{ color: 'var(--clr-danger)' }}>*</span>
+                </label>
+                <p style={{ color: 'var(--clr-text-muted)', fontSize: '.82rem', marginTop: '.15rem' }}>{q.desc}</p>
+              </div>
+              <SegmentedRating id={q.key} value={ratings[q.key].score} onChange={v => setScore(q.key, v)} />
+            </div>
 
-            <div className="form-group" style={{ marginTop: '.75rem', marginBottom: 0 }}>
-              <label htmlFor={`reason-${q.key}`} className="form-label">
-                Reason <span style={{ color: 'var(--clr-danger)' }}>*</span>
-                <span style={{ fontWeight: 400, color: 'var(--clr-text-muted)', marginLeft: '.4rem' }}>(min 5 characters)</span>
+            {errors[`${q.key}_score`] && <p className="form-error" style={{ marginBottom: '.5rem' }}>{errors[`${q.key}_score`]}</p>}
+
+            <div className="form-group" style={{ marginTop: '.65rem', marginBottom: 0 }}>
+              <label htmlFor={`reason-${q.key}`} className="form-label" style={{ fontSize: '.78rem' }}>
+                Evaluation Reason <span style={{ color: 'var(--clr-danger)' }}>*</span> (min 5 characters)
               </label>
               <textarea
                 id={`reason-${q.key}`}
                 className="form-input"
                 rows={2}
-                placeholder="Briefly explain your rating…"
+                placeholder="Explain why you gave this rating…"
                 value={ratings[q.key].reason}
                 onChange={e => setReason(q.key, e.target.value)}
+                style={{ fontSize: '.86rem', resize: 'vertical' }}
               />
               {errors[`${q.key}_reason`] && <p className="form-error">{errors[`${q.key}_reason`]}</p>}
             </div>
@@ -284,31 +370,44 @@ const FeedbackForm = () => {
         ))}
 
         {/* Optional global comments */}
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <h3 style={{ fontWeight: 700, marginBottom: '1rem' }}>Additional Comments (Optional)</h3>
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <h3 style={{ fontSize: '.95rem', fontWeight: 700, marginBottom: '.75rem', color: 'var(--clr-text)' }}>
+            Qualitative Commentary (Optional)
+          </h3>
           <div className="form-group">
-            <label htmlFor="pos-comment" className="form-label">What did you appreciate most?</label>
-            <textarea id="pos-comment" className="form-input" rows={3}
-              value={positiveComment} onChange={e => setPositiveComment(e.target.value)} />
+            <label htmlFor="pos-comment" className="form-label">Key Strengths &amp; Commendations</label>
+            <textarea
+              id="pos-comment"
+              className="form-input"
+              rows={2}
+              placeholder="What teaching aspects were most effective?"
+              value={positiveComment}
+              onChange={e => setPositiveComment(e.target.value)}
+            />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label htmlFor="imp-comment" className="form-label">What could be improved?</label>
-            <textarea id="imp-comment" className="form-input" rows={3}
-              value={improvementComment} onChange={e => setImprovementComment(e.target.value)} />
+            <label htmlFor="imp-comment" className="form-label">Constructive Recommendations</label>
+            <textarea
+              id="imp-comment"
+              className="form-input"
+              rows={2}
+              placeholder="What could be enhanced in upcoming terms?"
+              value={improvementComment}
+              onChange={e => setImprovementComment(e.target.value)}
+            />
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
           <button
             className="btn btn-secondary"
             onClick={handleSaveDraft}
             disabled={draftSaving}
-            style={{ whiteSpace: 'nowrap' }}
           >
-            {draftSaving ? 'Saving…' : 'Save Draft'}
+            <Save size={15} /> {draftSaving ? 'Saving Draft…' : 'Save Draft'}
           </button>
-          <button className="btn btn-primary btn-block" onClick={handleNext}>
-            Review Answers →
+          <button className="btn btn-primary" onClick={handleNext} style={{ minWidth: '180px' }}>
+            Review Answers <ArrowRight size={15} />
           </button>
         </div>
       </div>
