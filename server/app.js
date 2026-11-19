@@ -8,7 +8,7 @@
 
 const express = require('express');
 const cors = require('cors');
-const { isDBConnected } = require('./config/db');
+const { connectDB, isDBConnected } = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 
 // ── Route imports (added progressively through the phases) ────────────────────
@@ -27,7 +27,15 @@ const app = express();
 
 // Parse incoming JSON bodies
 app.use(express.json());
-
+// Ensure MongoDB is connected before handling requests
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 // Allow the React dev server (port 5173 by default) to call this API
 app.use(
   cors({
