@@ -12,7 +12,38 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { MessageSquareCheck, Award, KeyRound, LogOut, GraduationCap, Building2, Calendar, FileText } from 'lucide-react';
 
-const CURRENT_YEAR = '2024-25';
+/**
+ * getBatchFromEnrollment
+ *
+ * Extracts the admission year from a student's enrollment number and
+ * returns a "YYYY-YYYY+1" batch string.
+ *
+ * Enrollment number format: 1<YYYY><remaining digits>
+ *   - Position 0    : "1" (fixed prefix)
+ *   - Positions 1-4 : 4-digit admission year
+ *
+ * Examples:
+ *   "12024002001236" → "2024-2025"  (prefix "1", year "2024")
+ *   "12023002001236" → "2023-2024"  (prefix "1", year "2023")
+ *   "12022002001236" → "2022-2023"  (prefix "1", year "2022")
+ *   "12021002001236" → "2021-2022"  (prefix "1", year "2021")
+ *
+ * Returns null when the enrollment number is missing or does not contain
+ * a valid 4-digit year at positions 1-4, so callers can show a fallback.
+ *
+ * NOTE: The semester has absolutely NO effect on the batch. The batch is
+ * determined solely by the admission year encoded in the enrollment number.
+ */
+const getBatchFromEnrollment = (enrollmentNumber) => {
+  if (!enrollmentNumber || typeof enrollmentNumber !== 'string') return null;
+  // We need at least 5 characters to reach the year digits (index 1-4)
+  if (enrollmentNumber.length < 5) return null;
+  const yearStr = enrollmentNumber.substring(1, 5);
+  const year = parseInt(yearStr, 10);
+  // A valid 4-digit year (1900–2099) check
+  if (isNaN(year) || year < 1900 || year > 2099) return null;
+  return `${year}-${year + 1}`;
+};
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -51,10 +82,15 @@ const Dashboard = () => {
                   Semester {user.semester}
                 </span>
               )}
-              <span>
-                <FileText size={14} />
-                Batch Of: {CURRENT_YEAR}
-              </span>
+              {(() => {
+                const batch = getBatchFromEnrollment(user?.rollNumber);
+                return batch ? (
+                  <span>
+                    <FileText size={14} />
+                    Batch: {batch}
+                  </span>
+                ) : null;
+              })()}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '.65rem', flexWrap: 'wrap' }}>
